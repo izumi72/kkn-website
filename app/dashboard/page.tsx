@@ -4,98 +4,111 @@ import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Wallet, Package, Backpack, LogOut, TrendingUp, TrendingDown, Scale, List, PlusCircle, ArrowDownCircle, ArrowUpCircle, Check, Trash2, FileText, RotateCcw } from 'lucide-react';
+import { 
+  Wallet, Package, Backpack, LogOut, TrendingUp, TrendingDown, Scale, List, 
+  PlusCircle, ArrowDownCircle, ArrowUpCircle, Check, Trash2, FileText, 
+  Utensils, Coffee, AlertTriangle, Users, Laptop, ShieldAlert 
+} from 'lucide-react';
 
-type DataKeuangan = {
-  id: string;
-  jenis: string;
-  nominal: number;
-  keterangan: string;
-  user_id: string;
-  created_at: string;
-};
+// --- TIPE DATA ---
+type DataKeuangan = { id: string; jenis: string; nominal: number; keterangan: string; created_at: string; };
+type DataStok = { id: string; nama_bahan: string; jenis: string; jumlah: number; satuan: string; pembawa: string; tanggal_masuk: string; };
+type DataInventaris = { id: string; nama_barang: string; kategori: string; jumlah: number; pemilik: string; kondisi: string; catatan: string; };
 
 export default function Dashboard() {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState('');
-  const [keuangan, setKeuangan] = useState<DataKeuangan[]>([]);
   const [activeTab, setActiveTab] = useState('finance');
   
-  // State Form Keuangan
-  const [jenis, setJenis] = useState('pemasukan');
-  const [keterangan, setKeterangan] = useState('');
-  const [nominal, setNominal] = useState('');
+  // --- STATE DATA ---
+  const [keuangan, setKeuangan] = useState<DataKeuangan[]>([]);
+  const [stok, setStok] = useState<DataStok[]>([]);
+  const [inventaris, setInventaris] = useState<DataInventaris[]>([]);
 
-  // Menghitung Saldo
-  const totalPemasukan = keuangan.filter(k => k.jenis === 'pemasukan').reduce((acc, curr) => acc + curr.nominal, 0);
-  const totalPengeluaran = keuangan.filter(k => k.jenis === 'pengeluaran').reduce((acc, curr) => acc + curr.nominal, 0);
-  const saldoAkhir = totalPemasukan - totalPengeluaran;
+  // --- STATE FORM KEUANGAN ---
+  const [jenisKeuangan, setJenisKeuangan] = useState('pemasukan');
+  const [ketKeuangan, setKetKeuangan] = useState('');
+  const [nomKeuangan, setNomKeuangan] = useState('');
+
+  // --- STATE FORM STOK ---
+  const [namaBahan, setNamaBahan] = useState('');
+  const [jenisStok, setJenisStok] = useState('Makanan');
+  const [jumlahStok, setJumlahStok] = useState('');
+  const [satuanStok, setSatuanStok] = useState('kg');
+  const [pembawaStok, setPembawaStok] = useState('');
+
+  // --- STATE FORM INVENTARIS ---
+  const [namaBarang, setNamaBarang] = useState('');
+  const [kategoriInv, setKategoriInv] = useState('Elektronik');
+  const [jumlahInv, setJumlahInv] = useState('1');
+  const [pemilikInv, setPemilikInv] = useState('');
+  const [kondisiInv, setKondisiInv] = useState('Baik');
+  const [catatanInv, setCatatanInv] = useState('');
+
+  // --- PERHITUNGAN STATISTIK ---
+  const saldoAkhir = keuangan.reduce((acc, curr) => curr.jenis === 'pemasukan' ? acc + curr.nominal : acc - curr.nominal, 0);
+  const stokMakanan = stok.filter(s => s.jenis === 'Makanan').length;
+  const stokMinuman = stok.filter(s => s.jenis === 'Minuman').length;
+  const invMahasiswa = new Set(inventaris.map(i => i.pemilik)).size;
+  const invElektronik = inventaris.filter(i => i.kategori === 'Elektronik').length;
+  const invPerluPerhatian = inventaris.filter(i => i.kondisi === 'Perlu Perhatian' || i.kondisi === 'Rusak').length;
 
   const siapkanData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push('/login');
-    } else {
-      setUserEmail(user.email || '');
-      const { data } = await supabase
-        .from('keuangan')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-      if (data) setKeuangan(data as DataKeuangan[]);
-    }
+    if (!user) return router.push('/login');
+    setUserEmail(user.email || '');
+
+    const [resKeuangan, resStok, resInv] = await Promise.all([
+      supabase.from('keuangan').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+      supabase.from('stok').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+      supabase.from('inventaris').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
+    ]);
+
+    if (resKeuangan.data) setKeuangan(resKeuangan.data as DataKeuangan[]);
+    if (resStok.data) setStok(resStok.data as DataStok[]);
+    if (resInv.data) setInventaris(resInv.data as DataInventaris[]);
   };
 
-  useEffect(() => {
-    siapkanData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { siapkanData(); }, []);
+  const formatRp = (angka: number) => 'Rp ' + angka.toLocaleString('id-ID');
 
-  const formatRp = (angka: number) => {
-    return 'Rp' + angka.toLocaleString('id-ID');
-  };
-
-  const tambahData = async (e: React.FormEvent) => {
+  // --- FUNGSI TAMBAH DATA ---
+  const tambahKeuangan = async (e: React.FormEvent) => {
     e.preventDefault();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    await supabase.from('keuangan').insert([{ user_id: user?.id, jenis: jenisKeuangan, nominal: parseInt(nomKeuangan), keterangan: ketKeuangan }]);
+    setKetKeuangan(''); setNomKeuangan(''); siapkanData();
+  };
 
-    await supabase.from('keuangan').insert([
-      { user_id: user.id, jenis, nominal: parseInt(nominal), keterangan }
-    ]);
-    
-    setNominal('');
-    setKeterangan('');
+  const tambahStok = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('stok').insert([{ 
+      user_id: user?.id, nama_bahan: namaBahan, jenis: jenisStok, 
+      jumlah: parseFloat(jumlahStok), satuan: satuanStok, pembawa: pembawaStok, 
+      tanggal_masuk: new Date().toISOString().split('T')[0] 
+    }]);
+    setNamaBahan(''); setJumlahStok(''); setPembawaStok(''); siapkanData();
+  };
+
+  const tambahInventaris = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('inventaris').insert([{ 
+      user_id: user?.id, nama_barang: namaBarang, kategori: kategoriInv, 
+      jumlah: parseInt(jumlahInv), pemilik: pemilikInv, kondisi: kondisiInv, catatan: catatanInv 
+    }]);
+    setNamaBarang(''); setPemilikInv(''); setCatatanInv(''); setJumlahInv('1'); siapkanData();
+  };
+
+  const hapusData = async (tabel: string, id: string) => {
+    await supabase.from(tabel).delete().eq('id', id);
     siapkanData();
   };
 
-  const hapusData = async (id: string) => {
-    await supabase.from('keuangan').delete().eq('id', id);
-    siapkanData();
-  };
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/'); };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/');
-  };
-
-  const downloadPDF = () => {
-    const doc = new jsPDF();
-    doc.text(`Laporan Keuangan KKN - ${userEmail}`, 14, 15);
-    const tableData = keuangan.map((item, index) => [
-      index + 1,
-      item.jenis.toUpperCase(),
-      formatRp(item.nominal),
-      item.keterangan
-    ]);
-    autoTable(doc, {
-      head: [['No', 'Jenis', 'Nominal', 'Keterangan']],
-      body: tableData,
-      startY: 20,
-    });
-    doc.save('Data_Keuangan_KKN.pdf');
-  };
-
+  // --- TAMPILAN (UI) ---
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: `
@@ -129,7 +142,7 @@ export default function Dashboard() {
         .btn-del:hover { background: var(--terracotta-soft); color: var(--terracotta); }
       `}} />
 
-      <div className="bg-paper">
+      <div className="bg-paper pb-20">
         {/* HEADER */}
         <header className="sticky top-0 z-40 backdrop-blur-md border-b" style={{ borderColor: 'var(--border)', background: 'rgba(239,233,220,0.88)' }}>
           <div className="max-w-7xl mx-auto px-5 md:px-8 py-3 flex items-center justify-between">
@@ -142,11 +155,9 @@ export default function Dashboard() {
                 <div className="text-xs" style={{ color: 'var(--ink-muted)' }}>{userEmail}</div>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <button onClick={handleLogout} className="btn-ghost px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5">
-                <LogOut className="w-3.5 h-3.5" /> Logout
-              </button>
-            </div>
+            <button onClick={handleLogout} className="btn-ghost px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+              <LogOut className="w-3.5 h-3.5" /> Logout
+            </button>
           </div>
         </header>
 
@@ -157,135 +168,169 @@ export default function Dashboard() {
               Catatan tiga pilar <br />
               <span style={{ color: 'var(--terracotta)', fontStyle: 'italic' }}>logistik</span> desa.
             </h1>
-            
-            <div className="grid grid-cols-3 gap-4 max-w-2xl mt-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mt-8">
               <div className="paper-card p-4" style={{ borderLeft: '4px solid var(--forest)' }}>
-                <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--ink-muted)' }}>Saldo Kas</div>
-                <div className="font-display font-black text-2xl mt-2">{formatRp(saldoAkhir)}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Saldo Kas</div>
+                <div className="font-display font-black text-2xl md:text-3xl mt-2">{formatRp(saldoAkhir)}</div>
               </div>
-              <div className="paper-card p-4 opacity-50" style={{ borderLeft: '4px solid var(--ochre)' }}>
-                <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--ink-muted)' }}>Item Stok</div>
-                <div className="font-display font-black text-2xl mt-2">Segera</div>
+              <div className="paper-card p-4" style={{ borderLeft: '4px solid var(--ochre)' }}>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Item Stok</div>
+                <div className="font-display font-black text-2xl md:text-3xl mt-2">{stok.length}</div>
               </div>
-              <div className="paper-card p-4 opacity-50" style={{ borderLeft: '4px solid var(--terracotta)' }}>
-                <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--ink-muted)' }}>Barang</div>
-                <div className="font-display font-black text-2xl mt-2">Segera</div>
+              <div className="paper-card p-4" style={{ borderLeft: '4px solid var(--terracotta)' }}>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Barang Pribadi</div>
+                <div className="font-display font-black text-2xl md:text-3xl mt-2">{inventaris.length}</div>
               </div>
             </div>
           </div>
         </section>
 
         {/* TAB NAV */}
-        <nav className="sticky top-[68px] z-30 backdrop-blur-md border-b" style={{ borderColor: 'var(--border)', background: 'rgba(239,233,220,0.92)' }}>
+        <nav className="sticky top-[68px] z-30 backdrop-blur-md border-b overflow-x-auto" style={{ borderColor: 'var(--border)', background: 'rgba(239,233,220,0.92)' }}>
           <div className="max-w-7xl mx-auto px-5 md:px-8 py-3 flex items-center gap-2">
-            <button onClick={() => setActiveTab('finance')} className={`tab-btn flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold ${activeTab === 'finance' ? 'active' : ''}`}>
-              <Wallet className="w-4 h-4" /> 01 · Keuangan
-            </button>
-            <button onClick={() => setActiveTab('stock')} className={`tab-btn flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold ${activeTab === 'stock' ? 'active' : ''}`}>
-              <Package className="w-4 h-4" /> 02 · Stok Konsumsi
-            </button>
-            <div className="ml-auto hidden md:flex items-center gap-2 pl-4">
-              <button onClick={downloadPDF} className="btn-ghost px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5" /> Ekspor PDF
-              </button>
-            </div>
+            <button onClick={() => setActiveTab('finance')} className={`tab-btn whitespace-nowrap flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold ${activeTab === 'finance' ? 'active' : ''}`}><Wallet className="w-4 h-4" /> 01 · Keuangan</button>
+            <button onClick={() => setActiveTab('stock')} className={`tab-btn whitespace-nowrap flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold ${activeTab === 'stock' ? 'active' : ''}`}><Package className="w-4 h-4" /> 02 · Stok Konsumsi</button>
+            <button onClick={() => setActiveTab('inventory')} className={`tab-btn whitespace-nowrap flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold ${activeTab === 'inventory' ? 'active' : ''}`}><Backpack className="w-4 h-4" /> 03 · Inventaris Pribadi</button>
           </div>
         </nav>
 
         {/* MAIN CONTENT */}
         <main className="max-w-7xl mx-auto px-5 md:px-8 py-8 md:py-10">
           
-          {/* TAB: KEUANGAN */}
+          {/* TAB 1: KEUANGAN */}
           {activeTab === 'finance' && (
             <div className="animate-fadeUp">
-              <div className="mb-8">
-                <div className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--terracotta)' }}>Pilar 01 — Arus Kas</div>
-                <h2 className="font-display font-black text-3xl mt-1">Buku Kas Kelompok</h2>
-              </div>
-
+              <div className="mb-6"><div className="text-xs font-bold uppercase tracking-widest text-orange-700">Pilar 01 — Arus Kas</div><h2 className="font-display font-black text-3xl mt-1">Buku Kas Kelompok</h2></div>
               <div className="grid lg:grid-cols-5 gap-6">
                 <div className="lg:col-span-2">
                   <div className="paper-card p-5">
-                    <h3 className="font-display font-bold text-lg mb-4 flex items-center gap-2">
-                      <PlusCircle className="w-5 h-5" style={{ color: 'var(--terracotta)' }} /> Catat Transaksi
-                    </h3>
-                    <form onSubmit={tambahData} className="space-y-4">
+                    <h3 className="font-display font-bold text-lg mb-4 flex items-center gap-2"><PlusCircle className="w-5 h-5 text-orange-700" /> Catat Transaksi</h3>
+                    <form onSubmit={tambahKeuangan} className="space-y-4">
                       <div className="flex gap-2">
-                        <button type="button" onClick={() => setJenis('pemasukan')} className={`chip flex-1 flex justify-center items-center gap-2 ${jenis === 'pemasukan' ? 'active' : ''}`}>
-                          <ArrowDownCircle className="w-4 h-4" /> Pemasukan
-                        </button>
-                        <button type="button" onClick={() => setJenis('pengeluaran')} className={`chip flex-1 flex justify-center items-center gap-2 ${jenis === 'pengeluaran' ? 'active' : ''}`}>
-                          <ArrowUpCircle className="w-4 h-4" /> Pengeluaran
-                        </button>
+                        <button type="button" onClick={() => setJenisKeuangan('pemasukan')} className={`chip flex-1 flex justify-center items-center gap-2 ${jenisKeuangan === 'pemasukan' ? 'active' : ''}`}><ArrowDownCircle className="w-4 h-4" /> Pemasukan</button>
+                        <button type="button" onClick={() => setJenisKeuangan('pengeluaran')} className={`chip flex-1 flex justify-center items-center gap-2 ${jenisKeuangan === 'pengeluaran' ? 'active' : ''}`}><ArrowUpCircle className="w-4 h-4" /> Pengeluaran</button>
                       </div>
-                      <div>
-                        <label className="label-paper">Deskripsi</label>
-                        <input type="text" className="input-paper" placeholder="Cth: Beli beras 10kg / Iuran Andi" required value={keterangan} onChange={(e) => setKeterangan(e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="label-paper">Nominal (Rp)</label>
-                        <input type="number" className="input-paper" placeholder="50000" required value={nominal} onChange={(e) => setNominal(e.target.value)} />
-                      </div>
-                      <button type="submit" className="btn-primary w-full py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2">
-                        <Check className="w-4 h-4" /> Simpan ke Buku Kas
-                      </button>
+                      <div><label className="label-paper">Deskripsi</label><input type="text" className="input-paper" placeholder="Cth: Beli beras 10kg" required value={ketKeuangan} onChange={(e) => setKetKeuangan(e.target.value)} /></div>
+                      <div><label className="label-paper">Nominal (Rp)</label><input type="number" className="input-paper" placeholder="50000" required value={nomKeuangan} onChange={(e) => setNomKeuangan(e.target.value)} /></div>
+                      <button type="submit" className="btn-primary w-full py-2.5 rounded-lg text-sm font-semibold flex justify-center gap-2"><Check className="w-4 h-4" /> Simpan Transaksi</button>
                     </form>
                   </div>
                 </div>
-
                 <div className="lg:col-span-3">
                   <div className="paper-card p-5">
                     <h3 className="font-display font-bold text-lg mb-4">Riwayat Transaksi</h3>
-                    <div className="overflow-x-auto">
-                      <table className="tbl w-full text-left">
-                        <thead>
-                          <tr>
-                            <th>Kategori</th>
-                            <th>Deskripsi</th>
-                            <th className="text-right">Nominal</th>
-                            <th></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {keuangan.map((item) => (
-                            <tr key={item.id} className="hover:bg-black/5">
-                              <td>
-                                <span className="badge" style={{ 
-                                  background: item.jenis === 'pemasukan' ? 'var(--forest-soft)' : 'var(--terracotta-soft)', 
-                                  color: item.jenis === 'pemasukan' ? 'var(--forest)' : 'var(--terracotta)' 
-                                }}>
-                                  {item.jenis}
-                                </span>
-                              </td>
-                              <td className="font-medium">{item.keterangan}</td>
-                              <td className="text-right font-bold" style={{ color: item.jenis === 'pemasukan' ? 'var(--forest)' : 'var(--terracotta)' }}>
-                                {item.jenis === 'pemasukan' ? '+' : '-'} {formatRp(item.nominal)}
-                              </td>
-                              <td className="text-right">
-                                <button onClick={() => hapusData(item.id)} className="btn-del">
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                          {keuangan.length === 0 && (
-                            <tr><td colSpan={4} className="text-center py-8 opacity-50">Belum ada transaksi dicatat.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                    <div className="overflow-x-auto"><table className="tbl w-full"><thead><tr><th>Kategori</th><th>Deskripsi</th><th className="text-right">Nominal</th><th></th></tr></thead><tbody>
+                      {keuangan.map((item) => (
+                        <tr key={item.id}>
+                          <td><span className="badge" style={{ background: item.jenis === 'pemasukan' ? 'var(--forest-soft)' : 'var(--terracotta-soft)', color: item.jenis === 'pemasukan' ? 'var(--forest)' : 'var(--terracotta)' }}>{item.jenis}</span></td>
+                          <td className="font-medium">{item.keterangan}</td>
+                          <td className="text-right font-bold" style={{ color: item.jenis === 'pemasukan' ? 'var(--forest)' : 'var(--terracotta)' }}>{item.jenis === 'pemasukan' ? '+' : '-'} {formatRp(item.nominal)}</td>
+                          <td className="text-right"><button onClick={() => hapusData('keuangan', item.id)} className="btn-del"><Trash2 className="w-4 h-4" /></button></td>
+                        </tr>
+                      ))}
+                      {keuangan.length === 0 && <tr><td colSpan={4} className="text-center py-8 opacity-50">Belum ada transaksi</td></tr>}
+                    </tbody></table></div>
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB: STOK (Tampilan Sementara) */}
+          {/* TAB 2: STOK KONSUMSI */}
           {activeTab === 'stock' && (
-            <div className="animate-fadeUp text-center py-20">
-              <Package className="w-16 h-16 mx-auto mb-4 opacity-20" />
-              <h2 className="font-display font-bold text-2xl text-gray-500">Fitur Stok Dapur Sedang Disiapkan</h2>
-              <p className="text-gray-500 mt-2">Nantinya Anda bisa mencatat bahan makanan di sini.</p>
+            <div className="animate-fadeUp">
+              <div className="mb-6"><div className="text-xs font-bold uppercase tracking-widest text-amber-700">Pilar 02 — Dapur Komunal</div><h2 className="font-display font-black text-3xl mt-1">Stok Bahan & Minuman</h2></div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                <div className="paper-card p-4"><div className="flex justify-between text-gray-500 text-[10px] font-bold">TOTAL ITEM <Package className="w-4 h-4 text-amber-700"/></div><div className="font-display text-2xl mt-2">{stok.length}</div></div>
+                <div className="paper-card p-4"><div className="flex justify-between text-gray-500 text-[10px] font-bold">MAKANAN <Utensils className="w-4 h-4 text-orange-700"/></div><div className="font-display text-2xl mt-2">{stokMakanan}</div></div>
+                <div className="paper-card p-4"><div className="flex justify-between text-gray-500 text-[10px] font-bold">MINUMAN <Coffee className="w-4 h-4 text-teal-700"/></div><div className="font-display text-2xl mt-2">{stokMinuman}</div></div>
+              </div>
+              <div className="grid lg:grid-cols-5 gap-6">
+                <div className="lg:col-span-2">
+                  <div className="paper-card p-5">
+                    <h3 className="font-display font-bold text-lg mb-4 flex items-center gap-2"><PlusCircle className="w-5 h-5 text-amber-700" /> Tambah Stok</h3>
+                    <form onSubmit={tambahStok} className="space-y-4">
+                      <div><label className="label-paper">Nama Bahan</label><input type="text" className="input-paper" placeholder="Cth: Beras premium" required value={namaBahan} onChange={(e) => setNamaBahan(e.target.value)} /></div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className="label-paper">Jenis</label><select className="input-paper" value={jenisStok} onChange={(e) => setJenisStok(e.target.value)}><option>Makanan</option><option>Minuman</option></select></div>
+                        <div><label className="label-paper">Jumlah</label><input type="number" step="0.1" className="input-paper" placeholder="0" required value={jumlahStok} onChange={(e) => setJumlahStok(e.target.value)} /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className="label-paper">Satuan</label><select className="input-paper" value={satuanStok} onChange={(e) => setSatuanStok(e.target.value)}><option>kg</option><option>liter</option><option>pcs</option><option>pack</option><option>botol</option></select></div>
+                        <div><label className="label-paper">Pembawa</label><input type="text" className="input-paper" placeholder="Cth: Andi" required value={pembawaStok} onChange={(e) => setPembawaStok(e.target.value)} /></div>
+                      </div>
+                      <button type="submit" className="btn-primary w-full py-2.5 rounded-lg text-sm font-semibold flex justify-center gap-2"><Check className="w-4 h-4" /> Catat Stok</button>
+                    </form>
+                  </div>
+                </div>
+                <div className="lg:col-span-3">
+                  <div className="paper-card p-5">
+                    <h3 className="font-display font-bold text-lg mb-4">Daftar Stok</h3>
+                    <div className="overflow-x-auto"><table className="tbl w-full"><thead><tr><th>Bahan</th><th>Jenis</th><th>Jumlah</th><th>Pembawa</th><th></th></tr></thead><tbody>
+                      {stok.map((s) => (
+                        <tr key={s.id}>
+                          <td className="font-medium">{s.nama_bahan}</td>
+                          <td><span className="badge bg-orange-100 text-orange-800">{s.jenis}</span></td>
+                          <td className="font-bold">{s.jumlah} <span className="font-normal text-xs text-gray-500">{s.satuan}</span></td>
+                          <td>{s.pembawa}</td>
+                          <td className="text-right"><button onClick={() => hapusData('stok', s.id)} className="btn-del"><Trash2 className="w-4 h-4" /></button></td>
+                        </tr>
+                      ))}
+                      {stok.length === 0 && <tr><td colSpan={5} className="text-center py-8 opacity-50">Belum ada stok</td></tr>}
+                    </tbody></table></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: INVENTARIS */}
+          {activeTab === 'inventory' && (
+            <div className="animate-fadeUp">
+              <div className="mb-6"><div className="text-xs font-bold uppercase tracking-widest text-orange-800">Pilar 03 — Barang Pribadi</div><h2 className="font-display font-black text-3xl mt-1">Inventaris Mahasiswa</h2></div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                <div className="paper-card p-4"><div className="flex justify-between text-gray-500 text-[10px] font-bold">TOTAL BARANG <Backpack className="w-4 h-4 text-orange-800"/></div><div className="font-display text-2xl mt-2">{inventaris.length}</div></div>
+                <div className="paper-card p-4"><div className="flex justify-between text-gray-500 text-[10px] font-bold">MAHASISWA <Users className="w-4 h-4 text-green-700"/></div><div className="font-display text-2xl mt-2">{invMahasiswa}</div></div>
+                <div className="paper-card p-4"><div className="flex justify-between text-gray-500 text-[10px] font-bold">ELEKTRONIK <Laptop className="w-4 h-4 text-teal-700"/></div><div className="font-display text-2xl mt-2">{invElektronik}</div></div>
+                <div className="paper-card p-4"><div className="flex justify-between text-gray-500 text-[10px] font-bold">PERHATIAN <ShieldAlert className="w-4 h-4 text-red-600"/></div><div className="font-display text-2xl mt-2">{invPerluPerhatian}</div></div>
+              </div>
+              <div className="grid lg:grid-cols-5 gap-6">
+                <div className="lg:col-span-2">
+                  <div className="paper-card p-5">
+                    <h3 className="font-display font-bold text-lg mb-4 flex items-center gap-2"><PlusCircle className="w-5 h-5 text-orange-800" /> Tambah Barang</h3>
+                    <form onSubmit={tambahInventaris} className="space-y-4">
+                      <div><label className="label-paper">Nama Barang</label><input type="text" className="input-paper" placeholder="Cth: Laptop Acer" required value={namaBarang} onChange={(e) => setNamaBarang(e.target.value)} /></div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className="label-paper">Kategori</label><select className="input-paper" value={kategoriInv} onChange={(e) => setKategoriInv(e.target.value)}><option>Elektronik</option><option>Pakaian</option><option>Alat Mandi</option><option>Obat-obatan</option><option>Dokumen</option><option>Lainnya</option></select></div>
+                        <div><label className="label-paper">Jumlah</label><input type="number" className="input-paper" min="1" required value={jumlahInv} onChange={(e) => setJumlahInv(e.target.value)} /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className="label-paper">Pemilik</label><input type="text" className="input-paper" placeholder="Nama mahasiswa" required value={pemilikInv} onChange={(e) => setPemilikInv(e.target.value)} /></div>
+                        <div><label className="label-paper">Kondisi</label><select className="input-paper" value={kondisiInv} onChange={(e) => setKondisiInv(e.target.value)}><option>Baik</option><option>Layak</option><option>Perlu Perhatian</option><option>Rusak</option></select></div>
+                      </div>
+                      <div><label className="label-paper">Catatan (Opsional)</label><input type="text" className="input-paper" placeholder="Cth: Bawa charger" value={catatanInv} onChange={(e) => setCatatanInv(e.target.value)} /></div>
+                      <button type="submit" className="btn-primary w-full py-2.5 rounded-lg text-sm font-semibold flex justify-center gap-2"><Check className="w-4 h-4" /> Catat Barang</button>
+                    </form>
+                  </div>
+                </div>
+                <div className="lg:col-span-3">
+                  <div className="paper-card p-5">
+                    <h3 className="font-display font-bold text-lg mb-4">Daftar Inventaris</h3>
+                    <div className="overflow-x-auto"><table className="tbl w-full"><thead><tr><th>Barang</th><th>Pemilik</th><th>Kondisi</th><th>Catatan</th><th></th></tr></thead><tbody>
+                      {inventaris.map((i) => (
+                        <tr key={i.id}>
+                          <td><div className="font-medium">{i.nama_barang}</div><div className="text-[11px] text-gray-500">{i.kategori} &times;{i.jumlah}</div></td>
+                          <td>{i.pemilik}</td>
+                          <td><span className="badge bg-gray-200 text-gray-800">{i.kondisi}</span></td>
+                          <td className="text-xs text-gray-500">{i.catatan || '-'}</td>
+                          <td className="text-right"><button onClick={() => hapusData('inventaris', i.id)} className="btn-del"><Trash2 className="w-4 h-4" /></button></td>
+                        </tr>
+                      ))}
+                      {inventaris.length === 0 && <tr><td colSpan={5} className="text-center py-8 opacity-50">Belum ada barang</td></tr>}
+                    </tbody></table></div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </main>
