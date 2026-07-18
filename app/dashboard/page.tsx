@@ -2,74 +2,74 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
-import { LogOut, PlusCircle, Trash2, Wallet, Package, Backpack } from 'lucide-react';
+import { LogOut, Wallet, Package, Backpack, PlusCircle, Trash2 } from 'lucide-react';
 
 export default function Dashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('finance');
+  const [userEmail, setUserEmail] = useState('');
   const [data, setData] = useState<any[]>([]);
-  const [input, setInput] = useState('');
 
   const fetchData = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return router.replace('/login');
+    setUserEmail(user.email || '');
     const { data } = await supabase.from(activeTab).select('*').eq('user_id', user.id);
     setData(data || []);
   }, [activeTab, router]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const addData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from(activeTab).insert([{ user_id: user?.id, deskripsi: input }]);
-    setInput(''); fetchData();
-  };
-
-  const deleteData = async (id: string) => {
-    await supabase.from(activeTab).delete().eq('id', id);
-    fetchData();
-  };
-
   return (
-    <div className="min-h-screen bg-[#EFE9DC] text-[#1F1B16] p-8 font-sans">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8 pb-4 border-b border-[#D9CFB8]">
-          <h1 className="text-3xl font-display font-black">Buku Lapangan KKN</h1>
-          <button onClick={async () => { await supabase.auth.signOut(); router.replace('/login'); }} 
-            className="flex items-center gap-2 bg-[#1F1B16] text-[#FDF9EF] px-4 py-2 rounded-lg hover:bg-[#C2410C] transition">
-            <LogOut size={16} /> Logout
+    <div className="min-h-screen bg-[#EFE9DC] text-[#1F1B16] font-sans" style={{backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(31,27,22,0.07) 1px, transparent 0)', backgroundSize: '22px 22px'}}>
+      {/* HEADER & HERO SECTION AESTHETIC */}
+      <header className="border-b border-[#D9CFB8] bg-[#F7F2E7]/80 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-8 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#1F1B16] text-[#FDF9EF] flex items-center justify-center font-black rounded-lg">K</div>
+            <div>
+              <h1 className="font-display font-black text-lg leading-none">Buku Lapangan KKN</h1>
+              <p className="text-xs text-[#8B8270]">{userEmail}</p>
+            </div>
+          </div>
+          <button onClick={async () => { await supabase.auth.signOut(); router.replace('/login'); }} className="text-xs font-semibold border border-[#B8AB8E] px-3 py-2 rounded-lg hover:bg-[#1F1B16] hover:text-[#FDF9EF] transition">
+            <LogOut size={14} className="inline mr-1"/> Logout
           </button>
         </div>
+      </header>
 
-        <div className="flex gap-2 mb-6">
+      {/* HERO */}
+      <section className="max-w-7xl mx-auto px-8 py-12">
+        <h1 className="font-display font-black text-6xl mb-6">Catatan tiga pilar <br/><span className="text-[#C2410C] italic">logistik</span> desa.</h1>
+        <div className="grid grid-cols-3 gap-4">
+          {['Saldo Kas', 'Item Stok', 'Barang'].map(item => (
+            <div key={item} className="bg-[#FDF9EF] border border-[#D9CFB8] p-5 rounded-xl shadow-sm">
+              <p className="text-[10px] font-bold uppercase text-[#8B8270]">{item}</p>
+              <p className="font-display font-black text-3xl mt-2">0</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* TABS & CONTENT */}
+      <main className="max-w-7xl mx-auto px-8 pb-12">
+        <div className="flex gap-2 mb-8">
           {['finance', 'stock', 'inventory'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} 
-              className={`px-6 py-2 rounded-lg font-semibold capitalize ${activeTab === tab ? 'bg-[#1F1B16] text-[#FDF9EF]' : 'bg-[#D9CFB8] text-[#1F1B16]'}`}>
-              {tab}
+              className={`px-5 py-2.5 rounded-lg font-semibold capitalize ${activeTab === tab ? 'bg-[#1F1B16] text-[#FDF9EF]' : 'bg-[#D9CFB8] text-[#1F1B16]'}`}>
+              {tab === 'finance' ? '01 · Keuangan' : tab === 'stock' ? '02 · Stok' : '03 · Inventaris'}
             </button>
           ))}
         </div>
 
-        <div className="bg-[#FDF9EF] p-6 rounded-xl border border-[#D9CFB8] shadow-lg">
-          <h2 className="text-xl font-bold mb-6 capitalize">Modul {activeTab}</h2>
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="flex flex-col gap-4">
-              <input className="input-paper p-3 border border-[#D9CFB8] rounded" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Masukkan deskripsi..." />
-              <button onClick={addData} className="bg-[#1F1B16] text-white p-3 rounded flex items-center justify-center gap-2"><PlusCircle size={18}/> Simpan Data</button>
-            </div>
-            <table className="w-full">
-              <tbody>
-                {data.map(item => (
-                  <tr key={item.id} className="border-b border-[#D9CFB8]">
-                    <td className="p-2">{item.deskripsi}</td>
-                    <td className="p-2 text-right"><Trash2 size={16} className="text-red-500 cursor-pointer" onClick={() => deleteData(item.id)} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="bg-[#FDF9EF] border border-[#D9CFB8] p-8 rounded-2xl shadow-xl">
+          <h2 className="text-2xl font-display font-black mb-6 capitalize">Modul {activeTab}</h2>
+          {/* Sini area isi data Anda */}
+          <div className="text-center py-10 border-2 border-dashed border-[#D9CFB8] rounded-xl text-[#8B8270]">
+            Modul {activeTab} siap digunakan. Silakan tambahkan data Anda.
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
