@@ -5,36 +5,52 @@ import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+// Tipe data didefinisikan dengan jelas agar TypeScript tidak marah
+type DataKeuangan = {
+  id: string;
+  jenis: string;
+  nominal: number;
+  keterangan: string;
+  user_id: string;
+};
+
 export default function Dashboard() {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState('');
-  const [keuangan, setKeuangan] = useState<any[]>([]);
+  const [keuangan, setKeuangan] = useState<DataKeuangan[]>([]);
   
   const [jenis, setJenis] = useState('pemasukan');
   const [nominal, setNominal] = useState('');
   const [keterangan, setKeterangan] = useState('');
 
+  // Memasukkan fungsi langsung ke dalam useEffect adalah cara paling aman di Next.js
   useEffect(() => {
-    checkUser();
-  }, []);
+    const siapkanData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/login');
+      } else {
+        setUserEmail(user.email || '');
+        // Ambil data keuangan
+        const { data } = await supabase
+          .from('keuangan')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        if (data) setKeuangan(data as DataKeuangan[]);
+      }
+    };
+    siapkanData();
+  }, [router]);
 
-  const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push('/login');
-    } else {
-      setUserEmail(user.email || '');
-      fetchKeuangan(user.id);
-    }
-  };
-
-  const fetchKeuangan = async (userId: string) => {
+  // Fungsi tambahan untuk me-refresh tabel setelah input data baru
+  const refreshTabel = async (userId: string) => {
     const { data } = await supabase
       .from('keuangan')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    if (data) setKeuangan(data);
+    if (data) setKeuangan(data as DataKeuangan[]);
   };
 
   const tambahData = async (e: React.FormEvent) => {
@@ -48,7 +64,7 @@ export default function Dashboard() {
     
     setNominal('');
     setKeterangan('');
-    fetchKeuangan(user.id);
+    refreshTabel(user.id);
   };
 
   const handleLogout = async () => {
