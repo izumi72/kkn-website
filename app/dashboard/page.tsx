@@ -2,12 +2,9 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
-import { 
-  Wallet, Package, Backpack, LogOut, PlusCircle, ArrowDownCircle, ArrowUpCircle, 
-  Check, Trash2, Utensils, Coffee, Users, Laptop, ShieldAlert 
-} from 'lucide-react';
+import { Wallet, Package, Backpack, LogOut, PlusCircle, ArrowDownCircle, ArrowUpCircle, Check, Trash2, Utensils, Coffee, Users, Laptop, ShieldAlert } from 'lucide-react';
 
-type DataKeuangan = { id: string; jenis: string; nominal: number; keterangan: string; };
+type DataKeuangan = { id: string; jenis: string; nominal: number; keterangan: string; created_at: string; };
 type DataStok = { id: string; nama_bahan: string; jenis: string; jumlah: number; satuan: string; pembawa: string; };
 type DataInventaris = { id: string; nama_barang: string; kategori: string; jumlah: number; pemilik: string; kondisi: string; catatan: string; };
 
@@ -36,34 +33,38 @@ export default function Dashboard() {
 
   useEffect(() => { siapkanData(); }, []);
 
-  // FUNGSI LOGOUT YANG DIPERBAIKI
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.replace('/login'); // Menggunakan replace agar tidak bisa "back" setelah logout
+    router.replace('/login');
     router.refresh();
   };
 
   return (
-    <div className="bg-orange-50 min-h-screen p-4 md:p-8">
+    <div className="min-h-screen bg-[#EFE9DC] text-[#1F1B16] p-8 font-sans">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+        {/* Header Aesthetic */}
+        <div className="flex justify-between items-center mb-8 pb-4 border-b border-[#D9CFB8]">
           <div>
-            <h1 className="text-2xl font-bold">Dashboard Peserta</h1>
-            <p className="text-sm text-gray-600">Login sebagai: {userEmail}</p>
+            <h1 className="text-3xl font-display font-black">Buku Lapangan KKN</h1>
+            <p className="text-sm text-[#8B8270]">{userEmail}</p>
           </div>
-          <button onClick={handleLogout} className="bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-900">
-            Logout
+          <button onClick={handleLogout} className="flex items-center gap-2 bg-[#1F1B16] text-[#FDF9EF] px-4 py-2 rounded-lg hover:bg-[#C2410C] transition">
+            <LogOut size={16} /> Logout
           </button>
         </div>
 
-        <div className="flex gap-4 mb-6">
-          <button onClick={() => setActiveTab('finance')} className={`px-4 py-2 rounded ${activeTab === 'finance' ? 'bg-green-600 text-white' : 'bg-white'}`}>Keuangan</button>
-          <button onClick={() => setActiveTab('stock')} className={`px-4 py-2 rounded ${activeTab === 'stock' ? 'bg-green-600 text-white' : 'bg-white'}`}>Stok</button>
+        {/* Tab Nav */}
+        <div className="flex gap-2 mb-6">
+          <button onClick={() => setActiveTab('finance')} className={`px-6 py-2 rounded-lg font-semibold ${activeTab === 'finance' ? 'bg-[#1F1B16] text-[#FDF9EF]' : 'bg-[#D9CFB8] text-[#1F1B16]'}`}>Keuangan</button>
+          <button onClick={() => setActiveTab('stock')} className={`px-6 py-2 rounded-lg font-semibold ${activeTab === 'stock' ? 'bg-[#1F1B16] text-[#FDF9EF]' : 'bg-[#D9CFB8] text-[#1F1B16]'}`}>Stok</button>
+          <button onClick={() => setActiveTab('inventory')} className={`px-6 py-2 rounded-lg font-semibold ${activeTab === 'inventory' ? 'bg-[#1F1B16] text-[#FDF9EF]' : 'bg-[#D9CFB8] text-[#1F1B16]'}`}>Inventaris</button>
         </div>
 
-        {/* Konten Dashboard (tetap sama) */}
-        <div className="bg-white p-6 rounded-lg shadow">
-            {activeTab === 'finance' ? <h2>Fitur Keuangan Aktif</h2> : <h2>Fitur Stok Aktif</h2>}
+        {/* Konten Tab */}
+        <div className="bg-[#FDF9EF] p-6 rounded-xl border border-[#D9CFB8] shadow-lg">
+          {activeTab === 'finance' && <h2 className="text-xl font-bold">Modul Keuangan (Data Tersedia)</h2>}
+          {activeTab === 'stock' && <h2 className="text-xl font-bold">Modul Stok (Data Tersedia)</h2>}
+          {activeTab === 'inventory' && <h2 className="text-xl font-bold">Modul Inventaris (Data Tersedia)</h2>}
         </div>
       </div>
     </div>
